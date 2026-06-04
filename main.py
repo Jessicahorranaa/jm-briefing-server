@@ -217,7 +217,8 @@ def montar_propriedades(d):
 # ---------------------------------------------------------------------------
 # Monta o corpo da página (diagnóstico + respostas completas)
 # ---------------------------------------------------------------------------
-def montar_corpo(d, diagnostico, foto_ids, ref_ids):
+def montar_corpo(d, diagnostico, foto_ids, ref_ids, obj_ids=None):
+    obj_ids = obj_ids or []
     blocks = [heading("✨ Diagnóstico Estratégico (IA)")]
     for par in diagnostico.split("\n"):
         if par.strip():
@@ -258,7 +259,17 @@ def montar_corpo(d, diagnostico, foto_ids, ref_ids):
         paragraph(f"Referências de estilo: {as_text(d.get('referencias_estilo'))}"),
     ]
 
-    blocks.append(heading("04 — Percepção"))
+    blocks.append(heading("04 — Cenário & Ambiente"))
+    blocks += [
+        bullet(f"Ambientes: {as_text(d.get('ambientes'))}"),
+        bullet(f"Cenários mais: {as_text(d.get('cenario_estilo'))}"),
+        paragraph(f"Cenário que traduz a marca: {as_text(d.get('cenario_experiencia'))}"),
+        paragraph(f"Objetos do universo de marca: {as_text(d.get('objetos_marca'))}"),
+    ]
+    if obj_ids:
+        blocks += [image_block(i) for i in obj_ids]
+
+    blocks.append(heading("05 — Percepção & Referências"))
     blocks += [
         bullet(f"Público precisa sentir: {as_text(d.get('publico_sentir'))}"),
         bullet(f"Objetivo das fotos: {as_text(d.get('objetivo_fotos'))}"),
@@ -270,7 +281,7 @@ def montar_corpo(d, diagnostico, foto_ids, ref_ids):
     ]
 
     if foto_ids:
-        blocks.append(heading("05 — Fotos da cliente"))
+        blocks.append(heading("Fotos da cliente"))
         blocks += [image_block(i) for i in foto_ids]
     if ref_ids:
         blocks.append(heading("Referências visuais enviadas"))
@@ -305,12 +316,13 @@ def webhook():
     # 2) Uploads (não bloqueiam o fluxo)
     foto_ids = [i for i in (upload_to_notion(f) for f in request.files.getlist("fotos")) if i]
     ref_ids = [i for i in (upload_to_notion(f) for f in request.files.getlist("referencias")) if i]
+    obj_ids = [i for i in (upload_to_notion(f) for f in request.files.getlist("objetos")) if i]
 
     # 3) Cria a página no Notion
     payload = {
         "parent": {"database_id": NOTION_DATABASE_ID},
         "properties": montar_propriedades(d),
-        "children": montar_corpo(d, diagnostico, foto_ids, ref_ids),
+        "children": montar_corpo(d, diagnostico, foto_ids, ref_ids, obj_ids),
     }
     r = requests.post("https://api.notion.com/v1/pages", headers=NOTION_HEADERS, json=payload, timeout=60)
     if r.status_code >= 300:
