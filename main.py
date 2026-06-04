@@ -223,12 +223,15 @@ def montar_corpo(d, diagnostico, foto_ids, ref_ids):
         if par.strip():
             blocks.append(callout(par.strip()) if par.strip().startswith(("1.", "2.", "3.", "4.", "5.", "6.")) else paragraph(par.strip()))
 
-    blocks.append(heading("01 — Posicionamento"))
+    blocks.append(heading("01 — Posicionamento & Percepção"))
     blocks += [
+        bullet(f"📱 Contato (WhatsApp): {as_text(d.get('contato'))}"),
+        bullet(f"Instagram: {as_text(d.get('instagram'))} · Nicho: {as_text(d.get('nicho'))}"),
         bullet(f"Estágio da marca: {as_text(d.get('estagio'))}"),
         bullet(f"O que quer transmitir: {as_text(d.get('sensacoes'))}"),
+        bullet(f"Objetivo das fotos: {as_text(d.get('objetivo_fotos'))}"),
         bullet(f"Frase-chave: {as_text(d.get('frase'))}"),
-        bullet(f"Não quer ser percebida como: {as_text(d.get('nao_percebida'))}"),
+        bullet(f"Não quer ser percebida como: {as_text(d.get('nao_transmitir'))}"),
         paragraph(f"Objetivo visual: {as_text(d.get('objetivo_visual'))}"),
     ]
 
