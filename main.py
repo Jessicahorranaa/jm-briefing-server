@@ -289,7 +289,7 @@ def montar_corpo(d, diagnostico, foto_ids, ref_ids, obj_ids=None):
     if d.get("observacoes"):
         blocks.append(paragraph(f"Observações finais: {as_text(d.get('observacoes'))}"))
 
-    return blocks[:100]  # Notion aceita até 100 blocos na criação
+    return blocks  # todos os blocos; a criação envia os 100 primeiros e o resto é anexado em lotes
 
 
 # ---------------------------------------------------------------------------
@@ -318,18 +318,33 @@ def webhook():
     ref_ids = [i for i in (upload_to_notion(f) for f in request.files.getlist("referencias")) if i]
     obj_ids = [i for i in (upload_to_notion(f) for f in request.files.getlist("objetos")) if i]
 
-    # 3) Cria a página no Notion
+    # 3) Cria a página no Notion (primeiros 100 blocos) e anexa o resto em lotes
+    all_blocks = montar_corpo(d, diagnostico, foto_ids, ref_ids, obj_ids)
     payload = {
         "parent": {"database_id": NOTION_DATABASE_ID},
         "properties": montar_propriedades(d),
-        "children": montar_corpo(d, diagnostico, foto_ids, ref_ids, obj_ids),
+        "children": all_blocks[:100],
     }
     r = requests.post("https://api.notion.com/v1/pages", headers=NOTION_HEADERS, json=payload, timeout=60)
     if r.status_code >= 300:
         print("Erro Notion:", r.text)
         return jsonify({"error": "Falha ao criar página no Notion", "detalhe": r.text}), 500
 
-    return jsonify({"ok": True, "page": r.json().get("url")}), 200
+    page = r.json()
+    page_id = page.get("id")
+    rest = all_blocks[100:]
+    for i in range(0, len(rest), 100):
+        try:
+            requests.patch(
+                f"https://api.notion.com/v1/blocks/{page_id}/children",
+                headers=NOTION_HEADERS,
+                json={"children": rest[i:i + 100]},
+                timeout=60,
+            )
+        except Exception as e:
+            print("Falha ao anexar blocos extras:", e)
+
+    return jsonify({"ok": True, "page": page.get("url")}), 200
 
 
 if __name__ == "__main__":
