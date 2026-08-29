@@ -1,4 +1,4 @@
-"""
+Page_DownPage_DownPage_DownPage_Down"""
 JM Briefing Server
 ------------------
 Recebe o briefing do formulário HTML (FormData com campo 'dados' = JSON),
@@ -114,25 +114,46 @@ def gerar_diagnostico(d):
         "6. RECOMENDAÇÃO FINAL — 1 frase de direção criativa.\n\n"
         f"BRIEFING:\n{resumo}"
     )
-    try:
-        r = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
-            json={
-                "model": GROQ_MODEL,
-                "temperature": 0.7,
-                "max_tokens": 1100,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-            },
-            timeout=60,
-        )
-        r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        return f"⚠️ Não foi possível gerar o diagnóstico automaticamente: {e}"
+    # Lista de modelos candidatos (a Groq descontinua modelos de tempos em tempos;
+    # tentamos em ordem até um funcionar, deixando o servidor auto-resiliente).
+    candidatos = []
+    if GROQ_MODEL:
+        candidatos.append(GROQ_MODEL)
+    for m in ["llama-3.3-70b-versatile", "openai/gpt-oss-120b",
+              "llama-3.1-8b-instant", "gemma2-9b-it"]:
+        if m not in candidatos:
+            candidatos.append(m)
+
+    ultimo_erro = ""
+    for modelo in candidatos:
+        try:
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": modelo,
+                    "temperature": 0.7,
+                    "max_tokens": 1100,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                },
+                timeout=60,
+            )
+            if r.status_code in (400, 404):
+                # modelo inválido/descontinuado — tenta o próximo
+                ultimo_erro = f"{modelo}: {r.status_code} {r.text[:120]}"
+                print("Groq modelo indisponível:", ultimo_erro)
+                continue
+            r.raise_for_status()
+            return r.json()["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            ultimo_erro = f"{modelo}: {e}"
+            print("Groq erro:", ultimo_erro)
+            continue
+
+    return f"⚠️ Não foi possível gerar o diagnóstico automaticamente: {ultimo_erro}"
 
 
 # ---------------------------------------------------------------------------
