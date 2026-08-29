@@ -1,4 +1,4 @@
-Page_DownPage_DownPage_DownPage_Down"""
+"""
 JM Briefing Server
 ------------------
 Recebe o briefing do formulário HTML (FormData com campo 'dados' = JSON),
@@ -142,7 +142,6 @@ def gerar_diagnostico(d):
                 timeout=60,
             )
             if r.status_code in (400, 404):
-                # modelo inválido/descontinuado — tenta o próximo
                 ultimo_erro = f"{modelo}: {r.status_code} {r.text[:120]}"
                 print("Groq modelo indisponível:", ultimo_erro)
                 continue
