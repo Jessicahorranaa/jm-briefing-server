@@ -11,3 +11,7 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: ACERVO_BRIEFING_URL
+        sync: false
+      - key: BRIEFING_BRIDGE_SECRET
+        sync: false

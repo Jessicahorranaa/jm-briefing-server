@@ -9,6 +9,8 @@ Variáveis de ambiente necessárias (configurar no Render):
   NOTION_TOKEN        -> token da integração interna do Notion (secret_...)
   NOTION_DATABASE_ID  -> a8673f9f821f4800a909b4a0651d9bf9
   GROQ_API_KEY        -> chave da Groq (gsk_...)
+  ACERVO_BRIEFING_URL     -> URL do Acervo Criativo + /api/briefing (opcional)
+  BRIEFING_BRIDGE_SECRET  -> segredo compartilhado com o Acervo (opcional)
 """
 
 import os
@@ -24,6 +26,11 @@ NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
 NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "a8673f9f821f4800a909b4a0651d9bf9")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+# Ponte com o Acervo Criativo (opcional -- se não configurada, o briefing
+# continua funcionando normalmente e só não alimenta o Acervo).
+ACERVO_BRIEFING_URL = os.environ.get("ACERVO_BRIEFING_URL", "")
+BRIEFING_BRIDGE_SECRET = os.environ.get("BRIEFING_BRIDGE_SECRET", "")
 
 NOTION_VERSION = "2022-06-28"
 NOTION_HEADERS = {
@@ -313,6 +320,25 @@ def montar_corpo(d, diagnostico, foto_ids, ref_ids, obj_ids=None):
 
 
 # ---------------------------------------------------------------------------
+# Ponte com o Acervo Criativo (aditiva -- nunca derruba o fluxo do Notion)
+# ---------------------------------------------------------------------------
+def enviar_para_acervo(d, diagnostico, notion_url):
+    if not ACERVO_BRIEFING_URL or not BRIEFING_BRIDGE_SECRET:
+        return  # ponte não configurada -- segue a vida normalmente
+    try:
+        r = requests.post(
+            ACERVO_BRIEFING_URL,
+            headers={"x-bridge-secret": BRIEFING_BRIDGE_SECRET, "Content-Type": "application/json"},
+            json={"dados": d, "diagnostico": diagnostico, "notion_url": notion_url},
+            timeout=20,
+        )
+        if r.status_code >= 300:
+            print("[Acervo] falha ao enviar briefing:", r.status_code, r.text[:200])
+    except Exception as e:
+        print("[Acervo] erro ao enviar briefing:", e)
+
+
+# ---------------------------------------------------------------------------
 # Rotas
 # ---------------------------------------------------------------------------
 @app.route("/")
@@ -352,6 +378,7 @@ def webhook():
 
     page = r.json()
     page_id = page.get("id")
+    page_url = page.get("url")
     rest = all_blocks[100:]
     for i in range(0, len(rest), 100):
         try:
@@ -364,7 +391,11 @@ def webhook():
         except Exception as e:
             print("Falha ao anexar blocos extras:", e)
 
-    return jsonify({"ok": True, "page": page.get("url")}), 200
+    # 4) Envia pro Acervo Criativo DEPOIS que o Notion já salvou -- se isso falhar,
+    # o briefing já está salvo no Notion e a resposta abaixo não é afetada.
+    enviar_para_acervo(d, diagnostico, page_url)
+
+    return jsonify({"ok": True, "page": page_url}), 200
 
 
 if __name__ == "__main__":
